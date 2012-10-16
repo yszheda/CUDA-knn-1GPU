@@ -32,38 +32,62 @@ __device__ void computeDimDist(int i, int j, int n, int *V)
 // compute the square of distance of the ith point and jth point
 __global__ void computeDist(int m, int n, int *V, int *D)
 {
-	int i = blockIdx.x;
-   	int j = blockIdx.y;
+	int x = blockIdx.x;
+   	int y = blockIdx.y;
 	int k = threadIdx.x;
 	int s;
+
+	int i;
+	int j;
+	int is_valid = 0;
+	int num = x*gridDim.y+y;
+	int sum = 0;
+	int next_sum = 0;
+	int cnt;
+	// identify the two points' indices 
+//	__syncthreads();
+//	for(cnt=0; cnt<m-1 && is_valid==0; cnt++)
+	for(cnt=0; cnt<=m-1; cnt++)
+	{
+		sum += (m-cnt-1);
+		next_sum = sum+(m-cnt-2);
+//		__syncthreads();
+		// check if the index of point i is valid
+		if(sum<=num && num<=next_sum)
+//		if(sum<=num && num<=(sum+m-cnt-2))
+		{
+			i = cnt;
+			j = num-sum+(i+1);
+			is_valid = 1;
+		}
+//		__syncthreads();
+	}
+	__syncthreads();
 	// calculate the square of distance per dimensions
 	// reduce duplicated calculations since d(i, j) = d(j, i)
 	// also, we do not consider the trivial case of d(i, i) = 0
 	// so we only compute the square distance when i < j 
-	if(i < j)
+	computeDimDist(i, j, n, V);
+	__syncthreads();
+	// use parallel reduction
+	for(s=n/2; s>0; s>>=1)
 	{
-		computeDimDist(i, j, n, V);
-		__syncthreads();
-		// use parallel reduction
-		for(s=n/2; s>0; s>>=1)
+		if(k < s)
 		{
-			if(k < s)
-			{
-				SM[k] += SM[k+s];
-			}
-			__syncthreads();
+			SM[k] += SM[k+s];
 		}
-		if(k == 0)
+		__syncthreads();
+	}
+	if(k == 0)
+	{
+		// when n is odd, the last element of SM needs to be added
+		if(n > (n/2)*2)
 		{
-			// when n is odd, the last element of SM needs to be added
-			if(n > (n/2)*2)
-			{
-				D[i*m+j] = SM[0] + SM[n-1];
-			}
-			else
-			{
-				D[i*m+j] = SM[0];
-			}
+			D[i*m+j] = SM[0] + SM[n-1];
+		}
+		else
+		{
+			D[i*m+j] = SM[0];
 		}
 	}
 }
@@ -163,7 +187,10 @@ int main(int argc, char *argv[])
 	int i;
 	int *V, *out;				//host copies
 	int *d_V, *d_out;			//device copies
-	int *D;						
+	int *D;	
+
+	int *test_D;						
+
 	FILE *fp_in;
 	FILE *fp_out;
 	if(argc != 2)
@@ -185,6 +212,9 @@ int main(int argc, char *argv[])
 	{
 		V = (int *) malloc(m*n*sizeof(int));
 		out = (int *) malloc(m*k*sizeof(int));
+
+		test_D = (int *) malloc(m*m*sizeof(int));
+
 		// allocate space for devices copies
 		cudaMalloc((void **)&d_V, m*n*sizeof(int));
 		cudaMalloc((void **)&d_out, m*k*sizeof(int));
@@ -197,7 +227,19 @@ int main(int argc, char *argv[])
 		// copy host values to devices copies
 		cudaMemcpy(d_V, V, m*n*sizeof(int), cudaMemcpyHostToDevice);
 
-		dim3 grid(m, m);
+		int x, y;
+		// decide grid dimensions for computeDist
+		if(m == (m/2)*2)
+		{
+			x = m/2;
+			y = m-1;
+		}
+		else
+		{
+			x = (m-1)/2;
+			y = m;
+		}
+		dim3 grid(x, y);
 		// compute the execution time
 		cudaEvent_t start, stop;
 		// create event
@@ -218,6 +260,10 @@ int main(int argc, char *argv[])
 		fprintf(fp_out, "GPU calculation time:%f ms\n", time);
 		// copy result back to host
 		cudaMemcpy(out, d_out, m*k*sizeof(int), cudaMemcpyDeviceToHost);
+
+		cudaMemcpy(test_D, D, m*m*sizeof(int), cudaMemcpyDeviceToHost);
+		showResult(m, m, test_D);
+		printf("\n");
 
 		showResult(m, k, out);
 		printf("%f\n", time);
