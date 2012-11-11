@@ -106,7 +106,11 @@ __device__ int findMin(int m, int k, int count, int *D, int *out)
 	
 	for(int num=0; num<m; num+=MAX_PTRNUM_IN_SMEM)
 	{
-		for(int j=tid; j<indexBase; j+=blockDim.x)
+//		for(int j=tid; j<indexBase; j+=blockDim.x)
+		int range = indexBase/blockDim.x;
+		int start = tid*range;
+		int end = (tid+1)*range;
+		for(int j=start; j<end; j++)
 		{
 			if(j+num == i)
 			{
