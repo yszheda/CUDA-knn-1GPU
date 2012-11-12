@@ -39,8 +39,10 @@ __global__ void computeDist(int m, int n, int *V, int *D)
 	int px;
 	int py;	
 
+	#pragma unroll
 	for(py=ty; py<TILE_WIDTH; py+=blockDim.y)
 	{
+//		#pragma unroll
 		for(px=tx; px<TILE_WIDTH; px+=blockDim.x)
 		{
 		
@@ -49,18 +51,22 @@ __global__ void computeDist(int m, int n, int *V, int *D)
 			dist[py][px] = 0;
 			__syncthreads();
 		
+			#pragma unroll
 			for(int i=0; i<(int)(ceil((float)n/TILE_DEPTH)); i++)
 			{
+//				#pragma unroll
 				for(int j=tx; j<TILE_DEPTH; j+=blockDim.x)
 				{
 					rowVector[py][j] = V[row*n+i*TILE_DEPTH+j];
 				}
+				#pragma unroll
 				for(int j=ty; j<TILE_DEPTH; j+=blockDim.y)
 				{		
 					colVector[j][px] = V[col*n+i*TILE_DEPTH+j];
 				}
 				__syncthreads();
 		
+				#pragma unroll
 				for(int j=0; j<TILE_DEPTH; j++)
 				{
 					dist[py][px] += (rowVector[py][j]-colVector[j][px])*(rowVector[py][j]-colVector[j][px]);
@@ -104,8 +110,12 @@ __device__ int findMin(int m, int k, int count, int *D, int *out)
 	int resultIndex = INIT_MAX;
 	int indexBase = (m<MAX_PTRNUM_IN_SMEM)? m: MAX_PTRNUM_IN_SMEM;
 	
+//	#pragma unroll 4
+	#pragma unroll 
 	for(int num=0; num<m; num+=MAX_PTRNUM_IN_SMEM)
 	{
+//		#pragma unroll 16
+//		#pragma unroll 
 		for(int j=tid; j<indexBase; j+=blockDim.x)
 		{
 			if(j+num == i)
@@ -154,8 +164,10 @@ __device__ int findMin(int m, int k, int count, int *D, int *out)
 		}
 		__syncthreads();
 
+		#pragma unroll 
 		for(s=indexBase/2; s>0; s>>=1) 
 		{
+//			#pragma unroll 
 			for(int j=tid; j<indexBase; j+=blockDim.x)
 			{
 				if(j < s) 
@@ -203,6 +215,7 @@ __global__ void knn(int m, int k, int *V, int *D, int *out)
 
 	i = blockIdx.x;
 	__syncthreads();
+//	#pragma unroll 
 	for(count=0; count<k; count++)
 	{
 		out[i*k+count] = findMin(m, k, count, D, out);
