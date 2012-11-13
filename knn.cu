@@ -107,7 +107,6 @@ __device__ int findMin(int m, int k, int count, int *D, int *out)
 		}
 		__syncthreads();
 
-/*
 //		for(s=indexBase/2; s>0; s>>=1) 
 		for(s=indexBase/2; s>32; s>>=1) 
 		{
@@ -131,7 +130,7 @@ __device__ int findMin(int m, int k, int count, int *D, int *out)
 				__syncthreads();
 			}
 		}
-*/
+/*
 		if(indexBase >= 1024)
 		{
 			if(tid < 512) 
@@ -211,7 +210,7 @@ __device__ int findMin(int m, int k, int count, int *D, int *out)
 			}
 			__syncthreads();
 		}
-
+*/
 		if(tid < 32)
 		{
 			/*
