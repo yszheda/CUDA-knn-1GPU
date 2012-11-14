@@ -17,8 +17,7 @@
 #define TILE_DEPTH 128
 //#define MAX_BLOCK_SIZE 256
 #define MAX_BLOCK_SIZE 1024
-//#define MAX_PTRNUM_IN_SMEM 4096
-#define MAX_PTRNUM_IN_SMEM 1024
+#define MAX_PTRNUM_IN_SMEM 4096
 
 void showResult(int m, int k, int *out);
 
@@ -271,27 +270,27 @@ int main(int argc, char *argv[])
 	{
 		V = (int *) malloc(m*n*sizeof(int));
 		out = (int *) malloc(m*k*sizeof(int));
+		for(i=0; i<m*n; i++)
+		{
+			fscanf(fp, "%d", &V[i]);
+		}
 
 //h_D = (int *) malloc(m*m*sizeof(int));
 //cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);	
 
 		// compute the execution time
 		cudaEvent_t start, stop;
-//		// create event
-//		cudaEventCreate(&start);
-//		cudaEventCreate(&stop);
-//		// record event
-//		cudaEventRecord(start);
+		// create event
+		cudaEventCreate(&start);
+		cudaEventCreate(&stop);
+		// record event
+		cudaEventRecord(start);
 
 		// allocate space for devices copies
 		cudaMalloc((void **)&d_V, m*n*sizeof(int));
 		cudaMalloc((void **)&d_out, m*k*sizeof(int));
 		cudaMalloc((void **)&D, m*m*sizeof(int));
 
-		for(i=0; i<m*n; i++)
-		{
-			fscanf(fp, "%d", &V[i]);
-		}
 		// copy host values to devices copies
 		cudaMemcpy(d_V, V, m*n*sizeof(int), cudaMemcpyHostToDevice);
 
@@ -303,12 +302,6 @@ int main(int argc, char *argv[])
 
 //		dim3 block(TILE_WIDTH/2, TILE_WIDTH/2);
 		dim3 block(TILE_WIDTH, TILE_WIDTH);
-
-		// create event
-		cudaEventCreate(&start);
-		cudaEventCreate(&stop);
-		// record event
-		cudaEventRecord(start);
 
 		// launch knn() kernel on GPU
 		computeDist<<<grid, block>>>(m, n, d_V, D);
@@ -325,22 +318,20 @@ int main(int argc, char *argv[])
 		knn<<<m, threadNum, 2*ptrNumInSMEM*sizeof(int)>>>(m, k, d_V, D, d_out);
 //		knn<<<m, threadNum, 2*m*sizeof(int)>>>(m, k, d_V, D, d_out);
 
+		// copy result back to host
+		cudaMemcpy(out, d_out, m*k*sizeof(int), cudaMemcpyDeviceToHost);
+
+		// cleanup
+		cudaFree(d_V);
+		cudaFree(d_out);
+		cudaFree(D);
+
 		// record event and synchronize
 		cudaEventRecord(stop);
 		cudaEventSynchronize(stop);
 		float time;
 		// get event elapsed time
 		cudaEventElapsedTime(&time, start, stop);
-
-		// copy result back to host
-		cudaMemcpy(out, d_out, m*k*sizeof(int), cudaMemcpyDeviceToHost);
-
-//		// record event and synchronize
-//		cudaEventRecord(stop);
-//		cudaEventSynchronize(stop);
-//		float time;
-//		// get event elapsed time
-//		cudaEventElapsedTime(&time, start, stop);
 
 		showResult(m, k, out);
 		if(m == 1024) {
@@ -352,10 +343,6 @@ int main(int argc, char *argv[])
 		}
 		printf("%f\n", time);
 
-		// cleanup
-		cudaFree(d_V);
-		cudaFree(d_out);
-		cudaFree(D);
 		free(V);
 		free(out);
 //free(h_D);
